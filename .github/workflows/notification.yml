@@ -1,0 +1,48 @@
+name: PushPlus Notification
+
+#CI计划
+on:
+  #自动编译：当Auto-Clean运行完成后
+  workflow_run:
+    workflows: ["Build All"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PushPlus Notification
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          PUSHPLUS_TOPIC: ${{ secrets.PUSHPLUS_TOPIC }}
+        run: |
+          # 设置消息内容
+          if [ "${{ job.status }}" == 'success' ]; then
+            STATUS="✅ 编译成功"
+            DETAIL="固件已打包完成"
+          else
+            STATUS="❌ 编译失败"
+            DETAIL="请检查工作流日志"
+          fi
+          
+          CONFIG="${{ env.WRT_CONFIG }}"
+          DATE="${{ env.WRT_DATE }}"
+          RUN_URL="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          
+          # 构建JSON数据
+          JSON_DATA=$(cat <<EOF
+          {
+            "token": "$PUSHPLUS_TOKEN",
+            "topic": "$PUSHPLUS_TOPIC",
+            "title": "GitHub编译通知",
+            "content": "配置: $CONFIG<br>状态: $STATUS<br>时间: $DATE<br>详情: $DETAIL<br><a href=\"$RUN_URL\">查看运行详情</a>",
+            "template": "html"
+          }
+          EOF
+          )
+          
+          # 发送通知
+          curl -X POST -H "Content-Type: application/json" -d "$JSON_DATA" http://www.pushplus.plus/send   
+          echo "通知已发送"
